@@ -138,7 +138,7 @@ variables:
 
 [更多关于变量的说明](https://docs.gitlab.com/ce/ci/variables/README.html)
 
-cache
+## cache
 
 > Runner0.7.0之后被介绍
 
@@ -150,7 +150,7 @@ cache
 
 如果`cache`在job元素之外被蒂尼，这意味着全局设置，并且所有的job会使用这个设置。以下是一些例子：
 
-### 缓存所有在`binaries`目录中的文件和`.config`文件：
+* 缓存所有在`binaries`目录中的文件和`.config`文件：
 
 ```yaml
 rspec:
@@ -161,7 +161,7 @@ rspec:
     - .config
 ```
 
-### 缓存所有git未追踪的文件
+* 缓存所有git未追踪的文件
 
 ```yaml
 rspec:
@@ -170,7 +170,7 @@ rspec:
     untracked: true
 ```
 
-### 缓存所有git未追踪的文件和在binaries目录下的文件
+* 缓存所有git未追踪的文件和在binaries目录下的文件
 
 ```yaml
 rspec:
@@ -181,7 +181,7 @@ rspec:
     - binaries/
 ```
 
-### job级别定义的cache设置会负载全局级别的cache配置。该例子将仅缓存目录`binaries`
+* job级别定义的cache设置会负载全局级别的cache配置。该例子将仅缓存目录`binaries`
 
 ```yaml
 cache:
@@ -199,7 +199,7 @@ cache功能仅提供最努力的支持，但不要指望它总能生效。更多
 
 > The cache is provided on a best-effort basis, so don't expect that the cache will be always present.
 
-## cache:key
+### cache:key
 
 > Runner1.0.0中被介绍
 
@@ -209,26 +209,26 @@ key允许你在不同的job之间定义cache的种类，例如所有job共享的
 
 `cache:key`变量可以使用任何之前定义的变量。
 
-### 例子
-per-job caching:
+#### 例子
+* 缓存每个job
 ```yaml
 cache:
   key: "$CI_BUILD_NAME"
   untracked: true
 ```
-per-branch caching:
+缓存每个branch
 ```yaml
 cache:
   key: "$CI_BUILD_REF_NAME"
   untracked: true
 ```
-per-job and per-branch caching:
+缓存每个job和branch
 ```yaml
 cache:
   key: "$CI_BUILD_NAME/$CI_BUILD_REF_NAME"
   untracked: true
 ```
-per-branch and per-stage caching:
+缓存每个branch和每个stage
 ```yaml
 cache:
   key: "$CI_BUILD_STAGE/$CI_BUILD_REF_NAME"
@@ -245,4 +245,126 @@ cache:
   untracked: true
 ```
 
-(未完待续)
+## Jobs
+`.gitlab-ci.yml`允许配置无限个job。每个job必须有一个唯一的名称，并且不能是前文所说的任何一个保留字。一个job由一系列定义构建行为的参数组成。
+
+```yaml
+job_name:
+  script:
+    - rake spec
+    - coverage
+  stage: test
+  only:
+    - master
+  except:
+    - develop
+  tags:
+    - ruby
+    - postgres
+  allow_failure: true
+```
+
+|关键字|必要性|介绍|
+|-|-|-|
+|script|是|定义了Runner会执行的脚本命令|
+|image|否|使用Docker镜像，多内容参考[使用Docker镜像](https://docs.gitlab.com/ce/ci/docker/using_docker_images.html#define-image-and-services-from-gitlab-ciyml)|
+|services|否|使用Docker服务，更多内容参考 [使用Docker镜像](https://docs.gitlab.com/ce/ci/docker/using_docker_images.html#define-image-and-services-from-gitlab-ciyml)|
+|stage|否|定义构建的stage（默认：`test`）|
+|type|否|`stage`的别名|
+|variables|否|定义job级别的环境变量|
+|only|否|定义一组构建会创建的git refs|
+|except|否|定义一组构建不会创建的git refs|
+|tags|否|定义一组tags用于选择合适的Runner|
+|allow_failure|否|允许构建失败。失败的构建不会影响提交状态。|
+|when|否|定义什么时候执行构建。可选：`on_success`、`on_failure`、`always`、`manual`|
+|dependencies|否|定义当前构建依赖的其他构建，然后你可以在他们之间传递artifacts|
+|artifacts|否|定义一组构建artifact。|
+|cache|否|定义一组可以缓存以在随后的工作中共享的文件|
+|before_script|否|覆写全局的before_script命令|
+|after_script|否|覆写全局的after_script命令|
+|environment|否|定义当前构建完成后的运行环境的名称|
+
+## script
+
+这是一个或一组会被Runner执行的shell脚本。例如：
+
+```yaml
+jobA:
+  script: "bundle exec rspec"
+
+jobB:
+  script:
+    - uname -a
+    - bundle exec rspec
+```
+
+有时候，`script`命令需要被包在双引号或者单引号之间。例如，包含符号（`:`)的命令需要写在引号中，这样yaml的解析器才能正确的解析，而不会误以为这是一组键值对。在使用包含以下符号的命令时要特别小心：
+`:`、`{`、`}`、`[`、`]`、`,`、`&`、`*`、`#`、`?`、`|`、`-`、`<`、`>`、`=`、`!`、`%`、`@`、`` ` ``
+
+### stage
+
+`stage` 允许分组构建不同的stage。构建相同的`stage`时是并行进行的。更多关于stages的说明可以参阅[stages](#stages).
+
+### only and except
+
+`only` 和 `except` 是管理job在被构建时的refs策略的的参数。
+
+1. `only` 设置了需要被构建的branches和tags的名称。
+2. `except` 设置了*不需要*被构建的branches和tags的名称。
+
+这里有一些使用refs策略的规则：
+
+* `only` 和 `except` 是可以相互包含的。如果一个job中 `only` 和 `except`都被定义了，ref会同时被 `only` 过滤 `except`。
+* `only` 和 `except` 支持正则表达式。
+* `only` 和 `except` 可以使用这几个关键字： `branches`, `tags`和 `triggers`。
+* `only` 和 `except` 允许通过定义仓库路径的方式来过滤要fork的job。
+
+在以下的例子中，`job`将只会启动以`issue-`开头的refs，并且跳过所有的branches。
+
+```
+job:
+	# 使用正则
+	only:
+		- /^issue-.*$/
+  # 使用关键字
+	except:
+		- branches
+```
+
+在下边的例子中，`job`将仅对被打了tag的refs，或者是被API触发器触发时
+才执行：
+
+```
+job:
+  # 使用关键字
+  only:
+    - tags
+    - triggers
+```
+
+仓库路径可以用于让job仅为父仓库执行并且不fork：
+
+> The repository path can be used to have jobs executed only for the parent repository and not forks:
+
+```
+job:
+  only:
+    - branches@gitlab-org/gitlab-ce
+  except:
+    - master@gitlab-org/gitlab-ce
+```
+
+上述的例子将会为除了master以外的所有的branches运行`job`。
+
+## job variables
+
+可以通过使用`variables`定义job级别的构建变量。
+
+
+
+
+
+
+
+
+
